@@ -1,4 +1,5 @@
 const StarNotary = artifacts.require("StarNotary");
+const truffleAssert = require('truffle-assertions');
 
 var accounts;
 var owner;
@@ -78,17 +79,62 @@ it('lets user2 buy a star and decreases its balance in ether', async() => {
 it('can add the star name and star symbol properly', async() => {
     //1. Create a star
     //2. Call the name and symbol properties in your Smart Contract and compare with the name and symbol provided
+    let tokenId = 10;
+    let instance = await StarNotary.deployed();
+    await instance.createStar('Another Awesome Star!', tokenId, {from: accounts[0]})
+    assert.equal(await instance.name.call(), 'Udacity Star Token')
+    assert.equal(await instance.symbol.call(), 'UST')
 });
 
 it('lets 2 users exchange stars', async() => {
     // 1. Create 2 Stars
     // 2. Call the exchangeStars functions implemented in the Smart Contract
     // 3. Verify that the owners changed
+    let instance = await StarNotary.deployed();
+    // Create Star 1
+    let tokenId1 = 101;
+    let owner1 = accounts[1];
+    await instance.createStar('New Star 1', tokenId1, {from: owner1});
+    // Create Star 2
+    let tokenId2 = 102;
+    let owner2 = accounts[2];
+    await instance.createStar('New Star 2', tokenId2, {from: owner2});
+    // Test 1: Exchange stars request sent by owner 1
+    await instance.exchangeStars(tokenId1, tokenId2, {from: owner1});
+    // Verify starts have changed owners
+    let token1NewOwner = await instance.ownerOf.call(tokenId1);
+    let token2NewOwner = await instance.ownerOf.call(tokenId2);
+    assert.equal(token1NewOwner, owner2)
+    assert.equal(token2NewOwner, owner1)
+    // Test 2: Exchange stars back request sent by owner 2
+    await instance.exchangeStars(tokenId1, tokenId2, {from: owner2});
+    // Verify starts have changed owners
+    let token1OriginalOwner = await instance.ownerOf.call(tokenId1);
+    let token2OriginalOwner = await instance.ownerOf.call(tokenId2);
+    assert.equal(token1OriginalOwner, owner1)  // Start back at original owners
+    assert.equal(token2OriginalOwner, owner2)
+    // NOTE: Due to renaming symmetry it is not neccessary to test
+    // exchangeStars(tokenId2, tokenId1)
+    // Test 3: Exchange stars back request sent by incorrect owner - reverts
+    let ownerRandom = accounts[7];
+    await truffleAssert.reverts(instance.exchangeStars(tokenId1, tokenId2, {from: ownerRandom}));
 });
 
 it('lets a user transfer a star', async() => {
     // 1. create a Star
     // 2. use the transferStar function implemented in the Smart Contract
     // 3. Verify the star owner changed.
+    let instance = await StarNotary.deployed();
+    // Create Star 1
+    let tokenId = 201;
+    let owner1 = accounts[1];
+    let owner2 = accounts[2];
+    await instance.createStar('New Star 1', tokenId, {from: owner1});
+    // Transfer star to owner 2
+    await instance.transferStar(owner2, tokenId, {from: owner1});
+    let tokenNewOwner = await instance.ownerOf.call(tokenId);
+    assert.equal(tokenNewOwner, owner2)
+    // Transfer back by incorrect owner - reverts
+    let ownerRandom = accounts[7];
+    await truffleAssert.reverts(instance.transferStar(owner1, tokenId, {from: ownerRandom}));
 });
-
